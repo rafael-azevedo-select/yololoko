@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>yoloLOKO</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        header, footer {
+            width: 100%;
+            background-color: #333;
+            color: white;
+            padding: 10px 0;
+            text-align: center;
+            position: fixed;
+            left: 0;
+            z-index: 1000;
+        }
+        header {
+            top: 0;
+        }
+        footer {
+            bottom: 0;
+        }
+        #container {
+            text-align: center;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            padding: 20px;
+            border-radius: 10px;
+            background: #fff;
+            margin-top: 60px; /* Espaço para o cabeçalho */
+            margin-bottom: 60px; /* Espaço para o rodapé */
+            width: 80vw;
+        }
+        #camera {
+            width: 100%;
+            height: 60vh;
+            margin: 20px auto;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        #camera video {
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+        }
+        #info, #notifications {
+            margin-top: 20px;
+        }
+        #notifications {
+            border: 2px solid #900;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            margin-bottom: 5px;
+            background: #f9f9f9;
+            padding: 5px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>yoloLOKO</h1>
+</header>
+<div id="container">
+    <div id="camera">
+        <video id="videoElement" autoplay></video>
+    </div>
+    <div id="info">
+        <h2>O que foi encontrado:</h2>
+        <p id="detectionResult">Nada detectado ainda.</p>
+    </div>
+    <div id="weaponNotifications">
+        <h2>Últimas detecções de arma(s):</h2>
+        <ul id="weaponList"></ul>
+    </div>
+</div>
+<footer>
+    <p>Projeto em desenvolvimento pelos alunos de S.I. | PUCCAMP | Hospedado 100% na nuvem Amazon Web Services (AWS).</p>
+    <p>yoloLOKO © 2024 - Todos os Direitos Reservados.</p>
+</footer>
+<script>
+    const videoElement = document.getElementById('videoElement');
+    const detectionResult = document.getElementById('detectionResult');
+    const weaponList = document.getElementById('weaponList');
+    const maxWeaponDetections = 5;
+
+    function handleWeaponDetection(detections, imagePath) {
+        const currentTime = new Date().toLocaleTimeString();
+        const weapons = detections.filter(item => item.toLowerCase() === 'pistol' || item.toLowerCase() === 'knife');
+        weapons.forEach(weapon => {
+            if (weaponList.children.length >= maxWeaponDetections) {
+                weaponList.removeChild(weaponList.lastChild);
+            }
+            const listItem = document.createElement('li');
+            listItem.textContent = `${weapon.charAt(0).toUpperCase() + weapon.slice(1)} detectado às ${currentTime} `;
+            const viewLink = document.createElement('a');
+            viewLink.textContent = 'Ver Captura';
+            viewLink.href = imagePath;
+            viewLink.target = "_blank";
+            listItem.appendChild(viewLink);
+            weaponList.insertBefore(listItem, weaponList.firstChild);
+        });
+    }
+
+    async function sendFrame() {
+        const canvas = document.createElement('canvas');
+        canvas.width = videoElement.videoWidth;
+        canvas.height = videoElement.videoHeight;
+        const context = canvas.getContext('2d');
+        context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(async (blob) => {
+            const formData = new FormData();
+            formData.append('image', blob);
+            try {
+                const response = await fetch('/detect', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await response.json();
+                detectionResult.innerHTML = `Detectado: ${data.detected_objects.join(', ')}`;
+                handleWeaponDetection(data.detected_objects, data.imagePath);
+            } catch (error) {
+                detectionResult.innerHTML = "Erro ao processar a imagem.";
+                console.error("Error sending frame:", error);
+            }
+        }, 'image/jpeg');
+    }
+
+    function startAutomaticDetection() {
+        setInterval(sendFrame, 2000);
+    }
+
+    if (navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(function(stream) {
+                videoElement.srcObject = stream;
+                startAutomaticDetection();
+            })
+            .catch(function(err) {
+                console.log("Something went wrong!", err);
+            });
+    }
+</script>
+</body>
+</html>
